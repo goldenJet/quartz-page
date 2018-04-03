@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <style>
+        #jobManage_table .warning {
+            color: #d2d019;
+        }
+        #jobManage_table .error {
+            color: #953b39;
+        }
+        #jobManage_table .normal {
+            color: #00a157;
+        }
+    </style>
+</head>
+<body>
+<div>
+
+    <section class="content" id="jobManageSection">
+
+        <div class="box box-primary panelTable">
+            <div class="box-header with-border">
+                <span class="glyphicon glyphicon-th-list">
+                    <h5 class="box-title">定时任务列表</h5>
+                </span>
+            </div>
+            <div class="box-body">
+
+                <div class="modal fade" id="jobContentModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+                    <!--<div class="modal-dialog" style="width: 40%">-->
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                                <h4 class="modal-title" id="myModalLabel">新增定时任务</h4>
+                            </div>
+                            <div class="modal-body">
+                                <form id="jobContentModalForm">
+                                        <div class="form-group">
+                                            <label for="jobName">*任务名称</label>
+                                            <input type="text" class="form-control needReadOnly" id="jobName" name="jobName"
+                                                   placeholder="请输入任务名称" />
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="jobGroup">*任务分组</label>
+                                            <input type="text" class="form-control needReadOnly" id="jobGroup" name="jobGroup"
+                                                   placeholder="请输入任务分组" />
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="cronExpression">*时间表达式 <a class="btn-primary btn-xs fa fa-question" href="http://cron.qqe2.com/" target="_blank" title="cron在线生产器" /></label>
+                                            <input type="text" class="form-control" id="cronExpression" name="cronExpression"
+                                                   placeholder="请输入任务时间表达式" />
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="springId">*Spring Bean</label>
+                                            <input type="text" class="form-control" id="springId" name="springId"
+                                                   placeholder="请输入 Spring Bean 名" />
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="jobClass">*类名</label>
+                                            <input type="text" class="form-control" id="jobClass" name="jobClass"
+                                                   placeholder="请输入完整路径的类名" />
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="methodName">方法名</label>
+                                            <input type="text" class="form-control" id="methodName" name="methodName"
+                                                   placeholder="默认为 execute" />
+                                        </div>
+                                        <div class="form-group needHidden">
+                                            <label for="jobClass">是否取消并发</label>
+                                            <select class="form-control" id="isConcurrentDisallowed" name="isConcurrentDisallowed">
+                                                <option value="0">否</option>
+                                                <option value="1">是</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="description">任务描述</label>
+                                            <input type="text" class="form-control" id="description" name="description"
+                                                   placeholder="请输入任务描述" />
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="description">任务参数</label>
+                                            <textarea rows="3" class="form-control" id="jobDataMap" name="jobDataMap" placeholder="任务参数 JSON 格式" />
+                                        </div>
+                                </form>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-primary" onclick="jobContentSave()">保存</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="job_table_header_toolbar">
+                    <button type="button" class="btn btn-default" id="jobAdd" data-toggle="modal" data-target="#jobContentModal" onclick="genericEditFunc()">
+                        <i class="fa fa-fw fa-plus"></i>新建
+                    </button>
+
+                    <button type="button" class="btn btn-default btn_jobQuery" data-toggle="collapse" data-target="#advanceSearchCustomer">
+                        <i class=" fa fa-fw  fa-search"></i>
+                        高级查询
+                    </button>
+                </div>
+                <table id="jobManage_table"></table>
+            </div>
+        </div>
+    </section>
+</div>
+<script>
+    /*<![CDATA[*/
+    $(function () {
+        initComponent("jobManageSection");
+        genericJobManageTable();
+
+
+        $('#jobContentModal').on('hidden.bs.modal', function () {
+            formReset($("#jobContentModal #jobContentModalForm"));
+        })
+    });
+
+    function jobContentSave() {
+        $('#jobContentModal .modal-footer button').attr("disabled", "disabled");
+        var formResult = formToJson($("#jobContentModal #jobContentModalForm"));
+
+        for (var key in formResult){
+            if (!formResult[key] || formResult[key] == null || formResult[key] == ''){
+                delete formResult[key];
+            }
+        }
+        if (formValidCheck(formResult)){
+            showOverLay();
+            $.ajax({
+                type: "post",
+                dataType: "text",
+                contentType: "application/json; charset=utf-8",
+                url: "/job/addJob",
+                data: JSON.stringify(formResult),
+                success: function (data) {
+                    if (data === 'success') {
+                        $('#jobManage_table').bootstrapTable('refresh');
+                        $("#jobContentModal").modal('hide');
+                        alertMessageToastr('', '保存成功！', 'success');
+                    } else {
+                        alertMessageToastr('', '保存失败！');
+                    }
+                    hideOverLay();
+                },
+                error: function () {
+                    alertMessageToastr('', '服务器异常，请时候再试！');
+                    hideOverLay();
+                }
+            });
+        }
+        $('#jobContentModal .modal-footer button').removeAttr("disabled");
+    }
+    function formValidCheck(formResult) {
+        if (!formResult.jobName || !formResult.jobGroup || !formResult.cronExpression){
+            alertMessageToastr("", "* 号为必填项！", 'warning');
+            return false;
+        }
+        if (!formResult.springId && !formResult.jobClass){
+            alertMessageToastr("", "bean 或 class 请至少填一项！", 'warning');
+            return false;
+        }
+        try {
+            if (formResult.jobDataMap){
+                formResult.jobDataMap = $.parseJSON(formResult.jobDataMap);
+            }
+        } catch (error){
+            alertMessageToastr("", "任务参数 json 格式有误！", 'warning');
+            return false;
+        }
+        return true;
+    }
+
+    // 修改的时候部分属性隐藏
+    function genericEditFunc(flag) {
+        if (flag) {
+            $('#jobContentModal .needReadOnly').attr('readonly', 'readonly');
+            $('#jobContentModal .needHidden').hide();
+        } else {
+            $('#jobContentModal .needReadOnly').removeAttr('readonly');
+            $('#jobContentModal .needHidden').show();
+        }
+    }
+
+    function genericJobManageTable() {
+        $('#jobManage_table').bootstrapTable({
+            method: 'post',
+            url: '/job/listAllJobs',
+            sidePagination: 'server',
+            dataType: "json",
+            pagination: true,
+            pageSize: 20,
+            pageList: [20, 50, 100, 200, 500],
+            showColumns: true,
+            search: true,
+            striped: true,
+            checkboxHeader: false,
+            showRefresh: true,
+            queryParamsType: 'undefined',
+            toolbar: '#job_table_header_toolbar',
+            queryParams: function (params) {
+                return params;
+            },
+            columns: [{
+                field: 'jobId',
+                title: '任务Id',
+                sortable : true,
+                visible: false
+            }, {
+                field: 'jobName',
+                title: '任务名称',
+                sortable : true
+            }, {
+                field: 'jobGroup',
+                title: '任务分组',
+                sortable : true
+            }, {
+                field: 'jobStatus',
+                title: '状态',
+                sortable : true,
+                formatter: function (val) {
+                    switch (val) {
+                        case "NONE":
+                            return "<strong class='warning'>未知</strong>"; break;
+                        case "NORMAL":
+                            return "<strong class='normal'>正常运行</strong>"; break;
+                        case "PAUSED":
+                            return "<strong class='normal'>暂停</strong>"; break;
+                        case "COMPLETE":
+                            return "<strong class='normal'>完成</strong>"; break;
+                        case "ERROR":
+                            return "<strong class='error'>错误</strong>"; break;
+                        case "BLOCKED":
+                            return "<strong class='warning'>锁定</strong>"; break;
+                        case "DELETE":
+                            return "<strong class='warning'>删除</strong>"; break;
+                    }
+                }
+            }, {
+                field: 'jobDataMap',
+//                field: 'jobDataMapString',
+                title: '任务参数',
+//                sortable : true,
+                visible: false,
+                formatter: function (val) {
+                    if (val) {
+                        return JSON.stringify(val);
+                    }
+                }
+            }, {
+                field: 'triggerName',
+                title: '触发器名称',
+                sortable : true
+            }, {
+                field: 'triggerGroup',
+                title: '触发器分组',
+                sortable : true,
+                visible: false
+            }, {
+                field: 'triggerTimeZone',
+                title: '时区',
+                sortable : true,
+                visible: false
+            }, {
+                field: 'cronExpression',
+                title: '表达式',
+                sortable : true
+            }, {
+                field: 'description',
+                title: '任务描述',
+                visible : false
+            }, {
+                field: 'isConcurrent',
+                title: '是否并发进行',
+                sortable : true,
+                visible: false,
+                formatter: function (value) {
+                    if (value) {
+                        if (value == 1) {
+                            return "是";
+                        } else {
+                            return "否";
+                        }
+                    }
+                }
+            }, {
+                field: 'startTime',
+                title: '启动时间',
+                sortable : true,
+                visible: false,
+                formatter: function (value) {
+                    if (value) {
+                        return $.format.date(new Date(value), "yyyy-MM-dd HH:mm:ss");
+                    }
+                }
+            }, {
+                field: 'previousTime',
+                title: '前一次运行时间',
+                sortable : true,
+                visible: false,
+                formatter: function (value) {
+                    if (value) {
+                        return $.format.date(new Date(value), "yyyy-MM-dd HH:mm:ss");
+                    }
+                }
+            }, {
+                field: 'nextTime',
+                title: '下一次运行时间',
+                sortable : true,
+                formatter: function (value) {
+                    if (value) {
+                        return $.format.date(new Date(value), "yyyy-MM-dd HH:mm:ss");
+                    }
+                }
+            }, {
+                field: 'springId',
+                title: 'bean',
+                sortable : true
+            }, {
+                field: 'jobClass',
+                title: '类名',
+                sortable : true
+            }, {
+                field: 'methodName',
+                title: '方法名',
+                sortable : true
+            }, {
+                field: 'jobExecCount',
+                title: '总运行次数',
+                sortable : true
+            }, {
+                field: 'jobExceptionCount',
+                title: '异常运行次数',
+                sortable : true
+            }, {
+                field: 'action',
+                title: '操作',
+                formatter: function (value, row) {
+                    var $btnGroup = $('<div class="btn-toolbar" role="toolbar"/>');
+                    var $pauseButton = $('<div class="btn-group"><div class="pauseButton btn btn-default btn-xs fa fa-pause" title="暂停"/></div>');
+                    var $playButton = $('<div class="btn-group"><div class="playButton btn btn-default btn-xs fa fa-play" title="恢复"/></div>');
+                    var $editButton = $('<div class="btn-group"><div class="editButton btn btn-default btn-xs fa fa-pencil" title="修改"/></div>');
+                    var $delButton = $('<div class="btn-group"><div class="delButton btn btn-default btn-xs fa fa-times" title="删除"/></div>');
+                    if (row['jobStatus'] && row['jobStatus'] === 'NORMAL') {
+                        $btnGroup.append($pauseButton);
+                    }
+                    if (row['jobStatus'] && row['jobStatus'] === 'PAUSED') {
+                        $btnGroup.append($playButton);
+                    }
+                    $btnGroup.append($editButton).append($delButton);
+                    return $btnGroup[0].outerHTML;
+                }, events: {
+                    'click .pauseButton': function (e, value, row, index) {
+                        showOverLay();
+                        $.ajax({
+                            type: "post",
+                            dataType: "text",
+                            contentType: "application/json; charset=utf-8",
+                            url: "/job/pauseJob",
+                            data: JSON.stringify(row),
+                            success: function (data) {
+                                if (data === 'success') {
+                                    $('#jobManage_table').bootstrapTable('refresh');
+                                    alertMessageToastr('', '暂停成功！', 'success');
+                                } else {
+                                    alertMessageToastr('', '暂停失败！');
+                                }
+                                hideOverLay();
+                            },
+                            error: function () {
+                                alertMessageToastr('', '服务器异常，请时候再试！');
+                                hideOverLay();
+                            }
+                        });
+                    },
+                    'click .playButton': function (e, value, row, index) {
+                        showOverLay();
+                        $.ajax({
+                            type: "post",
+                            dataType: "text",
+                            contentType: "application/json; charset=utf-8",
+                            url: "/job/resumeJob",
+                            data: JSON.stringify(row),
+                            success: function (data) {
+                                if (data === 'success') {
+                                    $('#jobManage_table').bootstrapTable('refresh');
+                                    alertMessageToastr('', '恢复成功！', 'success');
+                                } else {
+                                    alertMessageToastr('', '恢复失败！');
+                                }
+                                hideOverLay();
+                            },
+                            error: function () {
+                                alertMessageToastr('', '服务器异常，请时候再试！');
+                                hideOverLay();
+                            }
+                        });
+                    },
+                    'click .editButton': function (e, value, row, index) {
+                        fillForm($("#jobContentModal #jobContentModalForm"), row, false);
+                        if (row['jobDataMap']){
+                            $("#jobContentModal #jobContentModalForm [name=jobDataMap]").val(JSON.stringify(row['jobDataMap']))
+                        }
+                        genericEditFunc(true);
+                        $('#jobContentModal').modal('show');
+                    },
+                    'click .delButton': function (e, value, row, index) {
+                        showOverLay();
+                        $.ajax({
+                            type: "post",
+                            dataType: "text",
+                            contentType: "application/json; charset=utf-8",
+                            url: "/job/deleteJob",
+                            data: JSON.stringify(row),
+                            success: function (data) {
+                                if (data === 'success') {
+                                    $('#jobManage_table').bootstrapTable('refresh');
+                                    alertMessageToastr('', '删除成功！', 'success');
+                                } else {
+                                    alertMessageToastr('', '删除失败！');
+                                }
+                                hideOverLay();
+                            },
+                            error: function () {
+                                alertMessageToastr('', '服务器异常，请时候再试！');
+                                hideOverLay();
+                            }
+                        });
+                    }
+                }
+            }]
+
+        });
+    }
+
+    /*]]>*/
+</script>
+</body>
+</html>
